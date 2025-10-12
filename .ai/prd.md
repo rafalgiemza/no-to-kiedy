@@ -117,7 +117,6 @@ When saving to the database
 Then each availability entry is stored as:
 
 json
-Skopiuj kod
 {
   "person": "User Name or ID",
   "from": "ISO 8601 timestamp",
