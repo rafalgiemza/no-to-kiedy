@@ -8,5 +8,5 @@ export default {
   dbCredentials: {
     url: env.DATABASE_URL,
   },
-  tablesFilter: ["no-to-kiedy_*"],
+  tablesFilter: ["ntk_*"],
 } satisfies Config;
