@@ -19,7 +19,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
-    "test": "vitest"
+    "test": "set NO_COLOR=true && vitest",
+    "vitest": "vitest"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
