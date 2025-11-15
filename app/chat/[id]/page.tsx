@@ -1,10 +1,11 @@
-import { getRoomById } from "@/server/rooms";
+import { getRoomById, joinRoomAsParticipant } from "@/server/rooms";
 import { getMessagesByRoomId } from "@/server/messages";
 import { getCurrentUser } from "@/server/users";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Chat, ChatMessage } from "@/components/chat";
+import { InviteCodeCopy } from "@/components/invite-code-copy";
 
 interface ChatPageProps {
   params: Promise<{
@@ -14,13 +15,24 @@ interface ChatPageProps {
 
 export default async function ChatPage(props: ChatPageProps) {
   const params = await props.params;
-  const room = await getRoomById(params.id);
+  let room = await getRoomById(params.id);
 
   if (!room) {
     notFound();
   }
 
   const { currentUser } = await getCurrentUser();
+
+  // Auto-join user to room if not already a participant
+  await joinRoomAsParticipant(params.id);
+
+  // Refresh room data to get updated participants list
+  room = await getRoomById(params.id);
+
+  if (!room) {
+    notFound();
+  }
+
   const messages = await getMessagesByRoomId(params.id);
 
   const formatDate = (date: Date) => {
@@ -105,11 +117,9 @@ export default async function ChatPage(props: ChatPageProps) {
 
           <div className="pt-4 border-t">
             <h3 className="font-semibold text-sm text-muted-foreground mb-2">
-              Invite Code
+              Invite Link
             </h3>
-            <code className="bg-muted px-3 py-1 rounded text-sm">
-              {room.inviteCode}
-            </code>
+            <InviteCodeCopy inviteCode={room.inviteCode} roomId={params.id} />
           </div>
         </CardContent>
       </Card>

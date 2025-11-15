@@ -105,3 +105,38 @@ export async function getMyRooms() {
 
   return rooms;
 }
+
+export async function joinRoomAsParticipant(roomId: string) {
+  const { currentUser } = await getCurrentUser();
+
+  // Check if user is already a participant
+  const existingParticipant = await db.query.roomParticipant.findFirst({
+    where: (roomParticipant, { and, eq, isNull }) =>
+      and(
+        eq(roomParticipant.roomId, roomId),
+        eq(roomParticipant.userId, currentUser.id),
+        isNull(roomParticipant.leftAt)
+      ),
+  });
+
+  // If already a participant, do nothing
+  if (existingParticipant) {
+    return;
+  }
+
+  // Add user as participant
+  const participantId = crypto.randomUUID();
+  const anonymizedHash = crypto
+    .createHash("sha256")
+    .update(`${roomId}-${currentUser.id}`)
+    .digest("hex");
+
+  await db.insert(roomParticipant).values({
+    id: participantId,
+    roomId,
+    userId: currentUser.id,
+    role: "participant",
+    anonymizedHash,
+    joinedAt: new Date(),
+  });
+}
