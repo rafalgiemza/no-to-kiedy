@@ -5,13 +5,24 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { ChatMessage } from "./types";
+import { ChatInput } from "./chat-input";
+import { useEffect, useRef } from "react";
 
 interface ChatProps {
   messages: ChatMessage[];
   currentUserId?: string;
+  roomId: string;
 }
 
-export function Chat({ messages, currentUserId }: ChatProps) {
+export function Chat({ messages, currentUserId, roomId }: ChatProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
   const formatTime = (date: Date) => {
     return new Date(date).toLocaleTimeString("pl-PL", {
       hour: "2-digit",
@@ -95,14 +106,11 @@ export function Chat({ messages, currentUserId }: ChatProps) {
               </div>
             );
           })}
+          <div ref={scrollRef} />
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t">
-        <p className="text-sm text-muted-foreground text-center">
-          Chat input will be implemented in future iterations
-        </p>
-      </div>
+      <ChatInput roomId={roomId} />
     </Card>
   );
 }

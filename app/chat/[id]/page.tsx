@@ -1,4 +1,6 @@
 import { getRoomById } from "@/server/rooms";
+import { getMessagesByRoomId } from "@/server/messages";
+import { getCurrentUser } from "@/server/users";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +20,9 @@ export default async function ChatPage(props: ChatPageProps) {
     notFound();
   }
 
+  const { currentUser } = await getCurrentUser();
+  const messages = await getMessagesByRoomId(params.id);
+
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleString("pl-PL", {
       dateStyle: "medium",
@@ -25,33 +30,21 @@ export default async function ChatPage(props: ChatPageProps) {
     });
   };
 
-  // Mocked messages from test examples (Test Case 1: Mixed Languages)
-  const mockedMessages: ChatMessage[] = [
-    {
-      id: "msg_1",
-      content: "Mogę rano 9-11 i po 15:00",
-      role: "user",
-      createdAt: new Date("2025-02-08T10:00:00.000Z"),
-      user: {
-        id: "user_1",
-        name: "Marek",
-        email: "marek@example.com",
-        image: "https://example.com/marek.jpg",
-      },
-    },
-    {
-      id: "msg_2",
-      content: "I'm available from 10am to 4pm",
-      role: "user",
-      createdAt: new Date("2025-02-08T10:15:00.000Z"),
-      user: {
-        id: "user_2",
-        name: "Sarah",
-        email: "sarah@example.com",
-        image: "https://example.com/sarah.jpg",
-      },
-    },
-  ];
+  // Transform database messages to ChatMessage format
+  const chatMessages: ChatMessage[] = messages.map((msg) => ({
+    id: msg.id,
+    content: msg.content,
+    role: msg.role,
+    createdAt: msg.createdAt,
+    user: msg.user
+      ? {
+          id: msg.user.id,
+          name: msg.user.name,
+          email: msg.user.email,
+          image: msg.user.image,
+        }
+      : null,
+  }));
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
@@ -122,7 +115,7 @@ export default async function ChatPage(props: ChatPageProps) {
       </Card>
 
       <div className="mt-6">
-        <Chat messages={mockedMessages} currentUserId="user_1" />
+        <Chat messages={chatMessages} currentUserId={currentUser.id} roomId={params.id} />
       </div>
     </div>
   );
