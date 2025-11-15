@@ -10,10 +10,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { getOrganizations } from "@/server/organizations";
+import { getMyRooms } from "@/server/rooms";
 import Link from "next/link";
 
 export default async function Dashboard() {
   const organizations = await getOrganizations();
+  const chatRooms = await getMyRooms();
 
   return (
     <div className="flex flex-col gap-4 items-center justify-center h-screen">
@@ -56,6 +58,15 @@ export default async function Dashboard() {
             <Link href={`/dashboard/organization/${organization.slug}`}>
               {organization.name}
             </Link>
+          </Button>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-2xl font-bold">Chat Rooms</h2>
+        {chatRooms.map((chatRoom) => (
+          <Button variant="outline" key={chatRoom.id} asChild>
+            <Link href={`/chat/${chatRoom.id}`}>{chatRoom.title}</Link>
           </Button>
         ))}
       </div>

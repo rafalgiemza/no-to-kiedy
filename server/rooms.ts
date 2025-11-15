@@ -4,7 +4,7 @@ import { db } from "@/db/drizzle";
 import { room, roomParticipant } from "@/db/schema";
 import { getCurrentUser } from "./users";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import crypto from "crypto";
 
 interface CreateRoomInput {
@@ -70,4 +70,38 @@ export async function getRoomById(roomId: string) {
   });
 
   return roomData;
+}
+
+export async function getMyRooms() {
+  const { currentUser } = await getCurrentUser();
+
+  // Find all room participants where the user is a participant
+  const participants = await db.query.roomParticipant.findMany({
+    where: eq(roomParticipant.userId, currentUser.id),
+  });
+
+  // Get the room IDs from participants
+  const roomIds = participants.map((p) => p.roomId);
+
+  if (roomIds.length === 0) {
+    return [];
+  }
+
+  // Fetch all rooms where user is either owner or participant
+  const rooms = await db.query.room.findMany({
+    where: or(
+      eq(room.ownerId, currentUser.id),
+      ...roomIds.map((id) => eq(room.id, id))
+    ),
+    with: {
+      owner: true,
+      participants: {
+        with: {
+          user: true,
+        },
+      },
+    },
+  });
+
+  return rooms;
 }
