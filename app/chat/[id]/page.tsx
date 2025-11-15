@@ -2,6 +2,7 @@ import { getRoomById } from "@/server/rooms";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Chat, ChatMessage } from "@/components/chat";
 
 interface ChatPageProps {
   params: Promise<{
@@ -23,6 +24,34 @@ export default async function ChatPage(props: ChatPageProps) {
       timeStyle: "short",
     });
   };
+
+  // Mocked messages from test examples (Test Case 1: Mixed Languages)
+  const mockedMessages: ChatMessage[] = [
+    {
+      id: "msg_1",
+      content: "Mogę rano 9-11 i po 15:00",
+      role: "user",
+      createdAt: new Date("2025-02-08T10:00:00.000Z"),
+      user: {
+        id: "user_1",
+        name: "Marek",
+        email: "marek@example.com",
+        image: "https://example.com/marek.jpg",
+      },
+    },
+    {
+      id: "msg_2",
+      content: "I'm available from 10am to 4pm",
+      role: "user",
+      createdAt: new Date("2025-02-08T10:15:00.000Z"),
+      user: {
+        id: "user_2",
+        name: "Sarah",
+        email: "sarah@example.com",
+        image: "https://example.com/sarah.jpg",
+      },
+    },
+  ];
 
   return (
     <div className="container mx-auto p-4 max-w-4xl">
@@ -93,16 +122,7 @@ export default async function ChatPage(props: ChatPageProps) {
       </Card>
 
       <div className="mt-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Chat</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground text-sm">
-              Chat functionality will be implemented here...
-            </p>
-          </CardContent>
-        </Card>
+        <Chat messages={mockedMessages} currentUserId="user_1" />
       </div>
     </div>
   );
