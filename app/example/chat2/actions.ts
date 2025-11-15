@@ -32,12 +32,7 @@ export async function analyzeData(input: string): Promise<DataAnalysis> {
         content: userPrompt({
           chatMessages: [
             {
-              userId: "456",
-              timestamp: "1763161091",
-              content: "Mogę w poniedziałek od 9 do 12 i od 15 do 19",
-            },
-            {
-              userId: "789",
+              userId: "123",
               timestamp: Date.now().toString(),
               content: input,
             },
