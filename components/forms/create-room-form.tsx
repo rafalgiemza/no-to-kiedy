@@ -19,25 +19,27 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { createRoom } from "@/server/rooms";
 
-const formSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters").max(100),
-  meetingDuration: z.coerce
-    .number()
-    .min(15, "Duration must be at least 15 minutes")
-    .max(480, "Duration cannot exceed 8 hours"),
-  searchTimeframeStart: z.string().min(1, "Start date is required"),
-  searchTimeframeEnd: z.string().min(1, "End date is required"),
-}).refine(
-  (data) => {
-    const start = new Date(data.searchTimeframeStart);
-    const end = new Date(data.searchTimeframeEnd);
-    return end > start;
-  },
-  {
-    message: "End date must be after start date",
-    path: ["searchTimeframeEnd"],
-  }
-);
+const formSchema = z
+  .object({
+    title: z.string().min(3, "Title must be at least 3 characters").max(100),
+    meetingDuration: z
+      .number()
+      .min(15, "Duration must be at least 15 minutes")
+      .max(480, "Duration cannot exceed 8 hours"),
+    searchTimeframeStart: z.string().min(1, "Start date is required"),
+    searchTimeframeEnd: z.string().min(1, "End date is required"),
+  })
+  .refine(
+    (data) => {
+      const start = new Date(data.searchTimeframeStart);
+      const end = new Date(data.searchTimeframeEnd);
+      return end > start;
+    },
+    {
+      message: "End date must be after start date",
+      path: ["searchTimeframeEnd"],
+    }
+  );
 
 export function CreateRoomForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -81,9 +83,7 @@ export function CreateRoomForm() {
               <FormControl>
                 <Input placeholder="Team Planning Meeting" {...field} />
               </FormControl>
-              <FormDescription>
-                What is this meeting about?
-              </FormDescription>
+              <FormDescription>What is this meeting about?</FormDescription>
               <FormMessage />
             </FormItem>
           )}
