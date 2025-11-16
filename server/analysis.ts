@@ -15,6 +15,7 @@ import crypto from "crypto";
 import { OpenRouterService } from "@/utils/open-router";
 import { systemPrompt, userPrompt } from "@/utils/atropic/chat-parser/prompts";
 import { findCommonAvailability, TimeSlot } from "@/utils/intersect";
+import { generateICS } from "@/utils/ics-generator";
 
 const openRouter = new OpenRouterService();
 
@@ -407,8 +408,10 @@ export async function getLatestAnalysisResults(roomId: string) {
 
   // Transform to the format expected by the UI
   const commonSlots = latestAnalysis.proposedSlots.map((slot) => ({
+    id: slot.id, // Include proposal ID for finalization
     start: slot.proposedStart.toISOString(),
     end: slot.proposedEnd.toISOString(),
+    isSelected: slot.isSelected, // Include selection status
   }));
 
   const contextData = latestAnalysis.contextData as {
@@ -421,5 +424,105 @@ export async function getLatestAnalysisResults(roomId: string) {
     commonSlots,
     participantsCount: contextData?.participantsCount || 0,
     meetingDuration: contextData?.minDurationInMinutes || 0,
+  };
+}
+
+/**
+ * US-010: Finalize a selected time slot
+ * Marks the room as COMPLETED and generates .ics file
+ * Only the room owner can finalize
+ */
+export async function finalizeTimeSlot(roomId: string, proposalId: string) {
+  const { currentUser } = await getCurrentUser();
+
+  // 1. Fetch room data with participants
+  const roomData = await db.query.room.findFirst({
+    where: eq(room.id, roomId),
+    with: {
+      owner: true,
+      participants: {
+        where: isNull(roomParticipant.leftAt),
+        with: {
+          user: true,
+        },
+      },
+    },
+  });
+
+  if (!roomData) {
+    throw new Error("Room not found");
+  }
+
+  // 2. Verify that current user is the owner (US-010 requirement)
+  if (roomData.ownerId !== currentUser.id) {
+    throw new Error("Only the room owner can finalize the meeting");
+  }
+
+  // 3. Verify room is still active
+  if (roomData.status !== "active") {
+    throw new Error("Room is not active");
+  }
+
+  // 4. Get the time slot proposal
+  const proposal = await db.query.timeSlotProposal.findFirst({
+    where: eq(timeSlotProposal.id, proposalId),
+  });
+
+  if (!proposal) {
+    throw new Error("Time slot proposal not found");
+  }
+
+  // 5. Generate .ics file content
+  const icsContent = generateICS({
+    title: roomData.title || "Meeting",
+    startTime: proposal.proposedStart,
+    endTime: proposal.proposedEnd,
+    description: `Meeting scheduled via No to kiedy`,
+    organizerEmail: roomData.owner.email,
+    organizerName: roomData.owner.name || "Organizer",
+    attendees: roomData.participants.map((p) => ({
+      email: p.user.email,
+      name: p.user.name || p.user.email,
+    })),
+  });
+
+  const now = new Date();
+
+  // 6. Update room with finalized slot
+  await db
+    .update(room)
+    .set({
+      finalizedSlotStart: proposal.proposedStart,
+      finalizedSlotEnd: proposal.proposedEnd,
+      finalizedAt: now,
+      status: "completed",
+      completedAt: now,
+      updatedAt: now,
+      // Store ICS content as a data URL for now (simple solution for MVP)
+      // In production, upload to S3/cloud storage
+      icsFileUrl: `data:text/calendar;base64,${Buffer.from(icsContent).toString("base64")}`,
+    })
+    .where(eq(room.id, roomId));
+
+  // 7. Mark proposal as selected
+  await db
+    .update(timeSlotProposal)
+    .set({ isSelected: true })
+    .where(eq(timeSlotProposal.id, proposalId));
+
+  console.log("=== MEETING FINALIZED ===");
+  console.log("Room ID:", roomId);
+  console.log("Proposal ID:", proposalId);
+  console.log("Selected Slot:", proposal.proposedStart, "to", proposal.proposedEnd);
+  console.log("Status changed to: completed");
+  console.log("========================");
+
+  return {
+    success: true,
+    data: {
+      finalizedSlotStart: proposal.proposedStart,
+      finalizedSlotEnd: proposal.proposedEnd,
+      icsContent,
+    },
   };
 }
