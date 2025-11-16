@@ -1,8 +1,13 @@
-import { intersectAvailability } from "./intersect";
+import { intersectAvailability, findPartialMatches } from "./intersect";
 import { sanitizeData, SanitizeDataInput } from "./sanitize-data";
 
 // Main export file for the intersect utility
-export { intersectAvailability, type TimeSlot } from "./intersect";
+export {
+  intersectAvailability,
+  findPartialMatches,
+  type TimeSlot,
+  type PartialMatchResult
+} from "./intersect";
 export {
   sanitizeData,
   DataValidationError,

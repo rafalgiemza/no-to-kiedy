@@ -9,7 +9,7 @@ import { ChatMessage } from "./types";
 import { ChatInput } from "./chat-input";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Calendar, Clock, Check, AlertCircle } from "lucide-react";
+import { Sparkles, Calendar, Clock, Check, AlertCircle, AlertTriangle } from "lucide-react";
 import {
   analyzeAvailability,
   finalizeTimeSlot,
@@ -22,12 +22,16 @@ interface TimeSlot {
   start: string;
   end: string;
   isSelected: boolean;
+  isPartialMatch?: boolean;
+  matchingParticipantsCount?: number;
+  totalParticipantsCount?: number;
 }
 
 interface AnalysisResult {
   commonSlots: TimeSlot[];
   participantsCount: number;
   meetingDuration: number;
+  status?: "success" | "partial_success" | "no_slots_found";
 }
 
 interface ChatProps {
@@ -353,6 +357,25 @@ export function Chat({
                       </span>
                     </div>
 
+                    {/* US-012: Partial Match Warning */}
+                    {analysisResult.status === "partial_success" &&
+                     analysisResult.commonSlots.length > 0 &&
+                     analysisResult.commonSlots[0].isPartialMatch && (
+                      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm text-amber-900 dark:text-amber-100 font-medium">
+                            ⚠️ Znaleziono termin dla{" "}
+                            {analysisResult.commonSlots[0].matchingParticipantsCount} z{" "}
+                            {analysisResult.commonSlots[0].totalParticipantsCount} uczestników
+                          </p>
+                          <p className="text-xs text-amber-800 dark:text-amber-200 mt-1">
+                            Nie wszyscy uczestnicy są dostępni w proponowanych terminach
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {analysisResult.commonSlots.length > 0 ? (
                       <div className="space-y-2 max-h-[400px] overflow-y-auto">
                         {analysisResult.commonSlots.slice(0, 3).map((slot) => (
@@ -374,6 +397,15 @@ export function Chat({
                             <div className="text-xs text-muted-foreground">
                               Ends: {formatDateTime(slot.end)}
                             </div>
+                            {/* US-012: Show participant count for partial matches */}
+                            {slot.isPartialMatch && (
+                              <div className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
+                                <AlertTriangle className="h-3 w-3" />
+                                <span>
+                                  {slot.matchingParticipantsCount}/{slot.totalParticipantsCount} uczestników
+                                </span>
+                              </div>
+                            )}
                             <Button
                               onClick={() => handleAcceptSlot(slot.id)}
                               disabled={isPending || slot.isSelected}
