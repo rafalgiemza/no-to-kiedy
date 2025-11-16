@@ -37,9 +37,13 @@ interface AnalysisResponse {
 
 /**
  * US-008: Analyze room availability and find common time slots
+ * US-011: Implements retry mechanism (up to 3 attempts) for system errors
  * Only the room owner (Organizer) can trigger this action
  */
-export async function analyzeAvailability(roomId: string) {
+export async function analyzeAvailability(
+  roomId: string,
+  retryAttempt: number = 0
+) {
   const { currentUser } = await getCurrentUser();
 
   // Fetch room data
@@ -250,6 +254,7 @@ export async function analyzeAvailability(roomId: string) {
 
     return {
       success: true,
+      status: "success" as const,
       data: {
         analysisId,
         parsedAvailability: analysisResult,
@@ -260,12 +265,54 @@ export async function analyzeAvailability(roomId: string) {
     };
   } catch (error) {
     console.error("=== ANALYSIS ERROR ===");
+    console.error("Retry attempt:", retryAttempt);
     console.error(error);
     console.error("=====================");
 
+    const errorMessage = (error as Error).message;
+
+    // Save error analysis to database (US-011)
+    const analysisId = crypto.randomUUID();
+    const lastMessageId =
+      chronologicalMessages.length > 0
+        ? chronologicalMessages[chronologicalMessages.length - 1].id
+        : undefined;
+
+    await db.insert(analysis).values({
+      id: analysisId,
+      roomId,
+      triggeredById: currentUser.id,
+      status: "error",
+      sentMessagesCount: chatMessages.length,
+      contextData: {
+        event_id: roomId,
+        minDurationInMinutes: roomData.meetingDuration,
+        participantsCount: roomData.participants.length,
+      },
+      errorMessage,
+      retryCount: retryAttempt,
+      aiModel: "claude-sonnet-4",
+      totalSlotsFound: 0,
+      proposedSlotsCount: 0,
+      createdAt: new Date(),
+      completedAt: new Date(),
+    });
+
+    // Update room's lastAnalysisMessageId if provided
+    if (lastMessageId) {
+      await db
+        .update(room)
+        .set({ lastAnalysisMessageId: lastMessageId })
+        .where(eq(room.id, roomId));
+    }
+
     return {
       success: false,
-      error: (error as Error).message,
+      status: "error" as const,
+      error: errorMessage,
+      analysisId,
+      retryCount: retryAttempt,
+      canRetry: retryAttempt < 3, // US-011: Allow up to 3 retry attempts
     };
   }
 }
