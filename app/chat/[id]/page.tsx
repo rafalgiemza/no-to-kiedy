@@ -1,6 +1,7 @@
 import { getRoomById, joinRoomAsParticipant } from "@/server/rooms";
 import { getMessagesByRoomId } from "@/server/messages";
 import { getCurrentUser } from "@/server/users";
+import { getLatestAnalysisResults } from "@/server/analysis";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,9 @@ export default async function ChatPage(props: ChatPageProps) {
   }
 
   const messages = await getMessagesByRoomId(params.id);
+
+  // Get latest analysis results if available
+  const latestAnalysis = await getLatestAnalysisResults(params.id);
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleString("pl-PL", {
@@ -125,7 +129,13 @@ export default async function ChatPage(props: ChatPageProps) {
       </Card>
 
       <div className="mt-6">
-        <Chat messages={chatMessages} currentUserId={currentUser.id} roomId={params.id} />
+        <Chat
+          messages={chatMessages}
+          currentUserId={currentUser.id}
+          roomId={params.id}
+          ownerId={room.ownerId}
+          initialAnalysisResult={latestAnalysis}
+        />
       </div>
     </div>
   );
