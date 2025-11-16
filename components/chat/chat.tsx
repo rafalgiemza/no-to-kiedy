@@ -9,7 +9,7 @@ import { ChatMessage } from "./types";
 import { ChatInput } from "./chat-input";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Calendar, Clock, Check } from "lucide-react";
+import { Sparkles, Calendar, Clock, Check, AlertCircle } from "lucide-react";
 import {
   analyzeAvailability,
   finalizeTimeSlot,
@@ -52,6 +52,12 @@ export function Chat({
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
     initialAnalysisResult || null
   );
+  const [error, setError] = useState<{
+    message: string;
+    retryCount: number;
+    canRetry: boolean;
+  } | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Check if current user is the owner
   const isOwner = currentUserId === ownerId;
@@ -63,10 +69,13 @@ export function Chat({
     }
   }, [messages]);
 
-  const handleFindTime = () => {
+  const handleFindTime = (currentRetryCount: number = 0) => {
     startTransition(async () => {
       try {
-        const result = await analyzeAvailability(roomId);
+        // Clear previous error when retrying
+        setError(null);
+
+        const result = await analyzeAvailability(roomId, currentRetryCount);
         console.log("Analysis result:", result);
 
         if (result.success) {
@@ -75,17 +84,39 @@ export function Chat({
 
           if (latestAnalysis) {
             setAnalysisResult(latestAnalysis);
+            setError(null);
+            setRetryCount(0); // Reset retry count on success
           } else {
             setAnalysisResult(null);
           }
         } else {
+          // US-011: Handle system error
           setAnalysisResult(null);
+          setError({
+            message: result.error || "Unknown error occurred",
+            retryCount: result.retryCount || 0,
+            canRetry: result.canRetry || false,
+          });
+          setRetryCount(result.retryCount || 0);
+          toast.error("Analysis failed: " + (result.error || "Unknown error"));
         }
       } catch (error) {
         console.error("Failed to analyze availability:", error);
         setAnalysisResult(null);
+        setError({
+          message: (error as Error).message,
+          retryCount: currentRetryCount,
+          canRetry: currentRetryCount < 3,
+        });
+        toast.error("Failed to analyze availability");
       }
     });
+  };
+
+  const handleRetry = () => {
+    const nextRetryCount = retryCount + 1;
+    setRetryCount(nextRetryCount);
+    handleFindTime(nextRetryCount);
   };
 
   const handleAcceptSlot = (proposalId: string) => {
@@ -253,7 +284,7 @@ export function Chat({
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="px-4 pt-3 space-y-3 flex-1 overflow-y-auto">
                 <Button
-                  onClick={handleFindTime}
+                  onClick={() => handleFindTime()}
                   disabled={isPending}
                   className="w-full cursor-pointer"
                   variant="default"
@@ -261,6 +292,47 @@ export function Chat({
                   <Sparkles className="h-4 w-4 mr-2" />
                   {isPending ? "Analyzing..." : "Find Time"}
                 </Button>
+
+                {/* US-011: System Error Display */}
+                {error && (
+                  <div className="space-y-2">
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-sm text-destructive mb-1">
+                            System Error
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {error.message}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-destructive/20">
+                        <span className="text-xs text-muted-foreground">
+                          Attempt {error.retryCount + 1} of 3
+                        </span>
+                        {error.canRetry && (
+                          <Button
+                            onClick={handleRetry}
+                            disabled={isPending}
+                            size="sm"
+                            variant="outline"
+                            className="cursor-pointer"
+                          >
+                            {isPending ? "Retrying..." : "Try Again"}
+                          </Button>
+                        )}
+                        {!error.canRetry && (
+                          <span className="text-xs text-destructive font-medium">
+                            Max retries reached
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {analysisResult && (
                   <div className="space-y-2">
