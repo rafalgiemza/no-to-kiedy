@@ -17,19 +17,20 @@ CONTEXT:
 Today date: ${Date.now()}
 Date Range: ${dateFrom} to ${dateTo}
 Min Duration: ${minDurationInMinutes}m
-Timezone: UTC (ISO 8601)
+Timezone: Europe/Warsaw (users write times in Polish timezone, convert to UTC in output)
 
 TASK:
 Extract time slots from participant messages and return valid JSON only.
 
 PARSING RULES:
-- 24h format: "14:00" → ISO timestamp
-- 12h format: "2pm" → 14:00
-- Ranges: "9-12", "2pm-5pm" → start/end pairs
-- Relative: "morning" = 09:00-12:00, "afternoon" = 13:00-17:00, "evening" = 17:00-20:00
+- All times from users are in Europe/Warsaw timezone and MUST be converted to UTC in the output
+- 24h format: "14:00" → 14:00 Europe/Warsaw → convert to UTC (e.g., 13:00 UTC in winter)
+- 12h format: "2pm" → 14:00 Europe/Warsaw → convert to UTC
+- Ranges: "9-12", "2pm-5pm" → start/end pairs in Europe/Warsaw → convert to UTC
+- Relative: "morning" = 09:00-12:00, "afternoon" = 13:00-17:00, "evening" = 17:00-20:00 (Europe/Warsaw) → convert to UTC
 - Polish: "rano" = morning, "po południu" = afternoon, "wieczorem" = evening
 - Days: "Monday", "poniedziałek" → resolve to date in range
-- "all day" / "cały dzień" → 09:00-17:00
+- "all day" / "cały dzień" → 09:00-17:00 Europe/Warsaw → convert to UTC
 
 EDGE CASES:
 - Multiple messages from same user: use latest timestamp
