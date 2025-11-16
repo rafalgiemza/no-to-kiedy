@@ -3,17 +3,25 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { ChatMessage } from "./types";
 import { ChatInput } from "./chat-input";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Calendar, Clock } from "lucide-react";
-import { analyzeAvailability } from "@/server/analysis";
+import { Sparkles, Calendar, Clock, Check } from "lucide-react";
+import {
+  analyzeAvailability,
+  finalizeTimeSlot,
+  getLatestAnalysisResults,
+} from "@/server/analysis";
+import { toast } from "sonner";
 
 interface TimeSlot {
+  id: string;
   start: string;
   end: string;
+  isSelected: boolean;
 }
 
 interface AnalysisResult {
@@ -28,6 +36,7 @@ interface ChatProps {
   roomId: string;
   ownerId: string;
   initialAnalysisResult?: AnalysisResult | null;
+  roomStatus?: "active" | "completed" | "archived";
 }
 
 export function Chat({
@@ -36,6 +45,7 @@ export function Chat({
   roomId,
   ownerId,
   initialAnalysisResult,
+  roomStatus = "active",
 }: ChatProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isPending, startTransition] = useTransition();
@@ -59,18 +69,43 @@ export function Chat({
         const result = await analyzeAvailability(roomId);
         console.log("Analysis result:", result);
 
-        if (result.success && result.data) {
-          setAnalysisResult({
-            commonSlots: result.data.commonSlots,
-            participantsCount: result.data.participantsCount,
-            meetingDuration: result.data.meetingDuration,
-          });
+        if (result.success) {
+          // Fetch the latest analysis results with proposal IDs
+          const latestAnalysis = await getLatestAnalysisResults(roomId);
+
+          if (latestAnalysis) {
+            setAnalysisResult(latestAnalysis);
+          } else {
+            setAnalysisResult(null);
+          }
         } else {
           setAnalysisResult(null);
         }
       } catch (error) {
         console.error("Failed to analyze availability:", error);
         setAnalysisResult(null);
+      }
+    });
+  };
+
+  const handleAcceptSlot = (proposalId: string) => {
+    startTransition(async () => {
+      try {
+        const result = await finalizeTimeSlot(roomId, proposalId);
+        console.log("Finalization result:", result);
+
+        if (result.success) {
+          toast.success("Meeting finalized! Refreshing...");
+          // Refresh the page to show completed state
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          toast.error("Failed to finalize meeting");
+        }
+      } catch (error) {
+        console.error("Failed to finalize time slot:", error);
+        toast.error("Failed to finalize meeting");
       }
     });
   };
@@ -117,140 +152,202 @@ export function Chat({
 
   return (
     <Card className="flex flex-col h-[600px]">
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map((message) => {
-            const isCurrentUser = message.user?.id === currentUserId;
-            const isAssistant = message.role === "assistant";
-            const isSystem = message.role === "system";
+      <Tabs defaultValue="chat" className="flex flex-col h-full">
+        <TabsList className="mx-4 mt-4 w-auto">
+          <TabsTrigger className="cursor-pointer" value="chat">
+            Chat
+          </TabsTrigger>
+          {isOwner && roomStatus === "active" && (
+            <TabsTrigger className="cursor-pointer" value="ai">
+              AI
+            </TabsTrigger>
+          )}
+        </TabsList>
 
-            if (isSystem) {
-              return (
-                <div key={message.id} className="flex justify-center">
-                  <div className="bg-muted text-muted-foreground text-xs px-3 py-1 rounded-full">
-                    {message.content}
-                  </div>
-                </div>
-              );
-            }
+        <TabsContent value="chat" className="flex-1 flex flex-col mt-0 overflow-hidden">
+          <ScrollArea className="flex-1 p-4 overflow-y-auto">
+            <div className="space-y-4">
+              {messages.map((message) => {
+                const isCurrentUser = message.user?.id === currentUserId;
+                const isAssistant = message.role === "assistant";
+                const isSystem = message.role === "system";
 
-            return (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex gap-3",
-                  isCurrentUser && "flex-row-reverse"
-                )}
-              >
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={message.user?.image || undefined} />
-                  <AvatarFallback>
-                    {message.user?.name ? getInitials(message.user.name) : "?"}
-                  </AvatarFallback>
-                </Avatar>
+                if (isSystem) {
+                  return (
+                    <div key={message.id} className="flex justify-center">
+                      <div className="bg-muted text-muted-foreground text-xs px-3 py-1 rounded-full">
+                        {message.content}
+                      </div>
+                    </div>
+                  );
+                }
 
-                <div
-                  className={cn(
-                    "flex flex-col gap-1 max-w-[70%]",
-                    isCurrentUser && "items-end"
-                  )}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">
-                      {message.user?.name || "Unknown"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatTime(message.createdAt)}
-                    </span>
-                  </div>
-
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      "rounded-lg px-4 py-2",
-                      isCurrentUser
-                        ? "bg-primary text-primary-foreground"
-                        : isAssistant
-                          ? "bg-accent text-accent-foreground"
-                          : "bg-muted"
+                      "flex gap-3",
+                      isCurrentUser && "flex-row-reverse"
                     )}
                   >
-                    <p className="text-sm whitespace-pre-wrap">
-                      {message.content}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div ref={scrollRef} />
-        </div>
-      </ScrollArea>
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={message.user?.image || undefined} />
+                      <AvatarFallback>
+                        {message.user?.name
+                          ? getInitials(message.user.name)
+                          : "?"}
+                      </AvatarFallback>
+                    </Avatar>
 
-      {isOwner && (
-        <div className="px-4 pt-3 border-t space-y-3">
-          <Button
-            onClick={handleFindTime}
-            disabled={isPending}
-            className="w-full"
-            variant="default"
-          >
-            <Sparkles className="h-4 w-4 mr-2" />
-            {isPending ? "Analyzing..." : "Find Time"}
-          </Button>
-
-          {analysisResult && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>
-                  {analysisResult.commonSlots.length > 0
-                    ? `Found ${analysisResult.commonSlots.length} common ${
-                        analysisResult.commonSlots.length === 1 ? "slot" : "slots"
-                      }`
-                    : "No common slots found"}
-                </span>
-                <span>{analysisResult.participantsCount} participants</span>
-              </div>
-
-              {analysisResult.commonSlots.length > 0 ? (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {analysisResult.commonSlots.slice(0, 3).map((slot, index) => (
                     <div
-                      key={index}
-                      className="bg-secondary/50 rounded-lg p-3 space-y-1"
+                      className={cn(
+                        "flex flex-col gap-1 max-w-[70%]",
+                        isCurrentUser && "items-end"
+                      )}
                     >
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatDateTime(slot.start)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>
-                          Duration: {calculateDuration(slot.start, slot.end)}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">
+                          {message.user?.name || "Unknown"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatTime(message.createdAt)}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Ends: {formatDateTime(slot.end)}
+
+                      <div
+                        className={cn(
+                          "rounded-lg px-4 py-2",
+                          isCurrentUser
+                            ? "bg-primary text-primary-foreground"
+                            : isAssistant
+                            ? "bg-accent text-accent-foreground"
+                            : "bg-muted"
+                        )}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">
+                          {message.content}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                  {analysisResult.commonSlots.length > 3 && (
-                    <div className="text-xs text-center text-muted-foreground">
-                      +{analysisResult.commonSlots.length - 3} more slots
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bg-secondary/50 rounded-lg p-3 text-sm text-muted-foreground text-center">
-                  No common availability found for all participants. Try
-                  extending the search timeframe or adjusting meeting duration.
-                </div>
-              )}
+                  </div>
+                );
+              })}
+              <div ref={scrollRef} />
+            </div>
+          </ScrollArea>
+
+          {roomStatus === "active" && <ChatInput roomId={roomId} />}
+
+          {roomStatus === "completed" && (
+            <div className="px-4 py-3 border-t bg-muted/50 text-center text-sm text-muted-foreground">
+              This room is completed and read-only
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
 
-      <ChatInput roomId={roomId} />
+        <TabsContent
+          value="ai"
+          className="flex-1 flex flex-col mt-0 overflow-hidden"
+        >
+          {isOwner && roomStatus === "active" ? (
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <div className="px-4 pt-3 space-y-3 flex-1 overflow-y-auto">
+                <Button
+                  onClick={handleFindTime}
+                  disabled={isPending}
+                  className="w-full cursor-pointer"
+                  variant="default"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {isPending ? "Analyzing..." : "Find Time"}
+                </Button>
+
+                {analysisResult && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>
+                        {analysisResult.commonSlots.length > 0
+                          ? `Found ${
+                              analysisResult.commonSlots.length
+                            } common ${
+                              analysisResult.commonSlots.length === 1
+                                ? "slot"
+                                : "slots"
+                            }`
+                          : "No common slots found"}
+                      </span>
+                      <span>
+                        {analysisResult.participantsCount} participants
+                      </span>
+                    </div>
+
+                    {analysisResult.commonSlots.length > 0 ? (
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                        {analysisResult.commonSlots.slice(0, 3).map((slot) => (
+                          <div
+                            key={slot.id}
+                            className="bg-secondary/50 rounded-lg p-3 space-y-2"
+                          >
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <Calendar className="h-4 w-4" />
+                              <span>{formatDateTime(slot.start)}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Clock className="h-4 w-4" />
+                              <span>
+                                Duration:{" "}
+                                {calculateDuration(slot.start, slot.end)}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Ends: {formatDateTime(slot.end)}
+                            </div>
+                            <Button
+                              onClick={() => handleAcceptSlot(slot.id)}
+                              disabled={isPending || slot.isSelected}
+                              className="w-full mt-2 cursor-pointer"
+                              size="sm"
+                              variant={slot.isSelected ? "outline" : "default"}
+                            >
+                              {slot.isSelected ? (
+                                <>
+                                  <Check className="h-3 w-3 mr-2" />
+                                  Selected
+                                </>
+                              ) : (
+                                "Accept"
+                              )}
+                            </Button>
+                          </div>
+                        ))}
+                        {analysisResult.commonSlots.length > 3 && (
+                          <div className="text-xs text-center text-muted-foreground">
+                            +{analysisResult.commonSlots.length - 3} more slots
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-secondary/50 rounded-lg p-3 text-sm text-muted-foreground text-center">
+                        No common availability found for all participants. Try
+                        extending the search timeframe or adjusting meeting
+                        duration.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center text-muted-foreground">
+                {roomStatus === "completed"
+                  ? "This room is completed"
+                  : "AI features are available only for the room owner"}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </Card>
   );
 }
