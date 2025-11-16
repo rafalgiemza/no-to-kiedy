@@ -5,7 +5,8 @@
       "Bash(npm test:*)",
       "Bash(npm run build:*)",
       "Bash(npx shadcn@latest:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(npx vitest:*)"
     ],
     "deny": [],
     "ask": []

@@ -18,11 +18,11 @@ export default function Home() {
           className="rounded-lg dark:invert"
         />
 
-        <h1 className="text-4xl font-bold">Better Auth Starter</h1>
+        <h1 className="text-4xl font-bold">no to kiedy</h1>
 
         <p className="text-lg">
-          This is a starter project for Better Auth. It is a simple project that
-          uses Better Auth to authenticate users.
+          to aplikacja, której głównym celem jest skuteczne znajdowanie
+          wspólnego terminu spotkania dla grupy zaproszonych gości.
         </p>
 
         <div className="flex gap-2">
