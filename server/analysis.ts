@@ -10,11 +10,11 @@ import {
   timeSlotProposal,
 } from "@/db/schema";
 import { getCurrentUser } from "./users";
-import { eq, desc, and, isNull } from "drizzle-orm";
+import { eq, desc, and, isNull, or } from "drizzle-orm";
 import crypto from "crypto";
 import { OpenRouterService } from "@/utils/open-router";
 import { systemPrompt, userPrompt } from "@/utils/atropic/chat-parser/prompts";
-import { findCommonAvailability, TimeSlot } from "@/utils/intersect";
+import { findPartialMatches, TimeSlot, PartialMatchResult } from "@/utils/intersect";
 import { generateICS } from "@/utils/ics-generator";
 
 const openRouter = new OpenRouterService();
@@ -212,7 +212,7 @@ export async function analyzeAvailability(
       throw new Error("No parsed result from AI");
     }
 
-    // Transform AI response to format expected by findCommonAvailability
+    // Transform AI response to format expected by findPartialMatches
     // allSchedules should be an array of arrays of {start, end}
     const allSchedules = analysisResult.event.participantWithAvailability.map(
       (participant) => participant.availability
@@ -225,16 +225,19 @@ export async function analyzeAvailability(
     console.log("Participants with availability:", allSchedules.length);
     console.log("Min duration (ms):", minDurationMs);
 
-    // Find common time slots
-    const commonSlots = findCommonAvailability({
-      allSchedules,
-      minDurationMs,
-    });
+    // US-012: Find partial matches if no full match exists
+    const matchResult = findPartialMatches(allSchedules, minDurationMs);
 
-    console.log("=== FOUND COMMON SLOTS ===");
-    console.log(JSON.stringify(commonSlots, null, 2));
-    console.log("Total slots found:", commonSlots.length);
-    console.log("===========================");
+    console.log("=== FOUND SLOTS ===");
+    if (matchResult) {
+      console.log("Match type:", matchResult.isPartialMatch ? "PARTIAL" : "FULL");
+      console.log("Matching participants:", matchResult.matchingParticipants, "/", matchResult.totalParticipants);
+      console.log("Slots:", JSON.stringify(matchResult.slots, null, 2));
+      console.log("Total slots found:", matchResult.slots.length);
+    } else {
+      console.log("No slots found (even for majority)");
+    }
+    console.log("===================");
 
     // Get the last message ID for tracking
     const lastMessageId =
@@ -246,21 +249,29 @@ export async function analyzeAvailability(
     const { analysisId } = await saveAnalysisResults({
       roomId,
       analysisResult,
-      commonSlots,
+      matchResult,
       rawApiResponse: response,
       sentMessagesCount: chatMessages.length,
       lastMessageId,
     });
 
+    // Determine status based on match result
+    let status: "success" | "partial_success" | "no_slots_found" = "no_slots_found";
+    if (matchResult) {
+      status = matchResult.isPartialMatch ? "partial_success" : "success";
+    }
+
     return {
       success: true,
-      status: "success" as const,
+      status,
       data: {
         analysisId,
         parsedAvailability: analysisResult,
-        commonSlots,
+        commonSlots: matchResult?.slots || [],
         participantsCount: allSchedules.length,
         meetingDuration: roomData.meetingDuration,
+        isPartialMatch: matchResult?.isPartialMatch || false,
+        matchingParticipants: matchResult?.matchingParticipants || 0,
       },
     };
   } catch (error) {
@@ -320,11 +331,12 @@ export async function analyzeAvailability(
 /**
  * Save analysis results to the database
  * Stores analysis metadata, parsed availabilities, and proposed time slots
+ * US-012: Supports partial matches
  */
 export async function saveAnalysisResults(params: {
   roomId: string;
   analysisResult: AnalysisResponse;
-  commonSlots: TimeSlot[];
+  matchResult: PartialMatchResult | null;
   rawApiResponse: any;
   sentMessagesCount: number;
   lastMessageId?: string;
@@ -334,10 +346,10 @@ export async function saveAnalysisResults(params: {
   // 1. Create analysis record
   const analysisId = crypto.randomUUID();
 
-  // Determine status based on results
-  let status: "success" | "partial_success" | "no_slots_found" = "success";
-  if (params.commonSlots.length === 0) {
-    status = "no_slots_found";
+  // Determine status based on results (US-012)
+  let status: "success" | "partial_success" | "no_slots_found" = "no_slots_found";
+  if (params.matchResult) {
+    status = params.matchResult.isPartialMatch ? "partial_success" : "success";
   }
 
   const totalParticipants =
@@ -363,8 +375,8 @@ export async function saveAnalysisResults(params: {
     },
     rawApiResponse: params.rawApiResponse,
     aiModel: "claude-sonnet-4",
-    totalSlotsFound: params.commonSlots.length,
-    proposedSlotsCount: Math.min(params.commonSlots.length, 3),
+    totalSlotsFound: params.matchResult?.slots.length || 0,
+    proposedSlotsCount: Math.min(params.matchResult?.slots.length || 0, 3),
     completedAt: new Date(),
   });
 
@@ -389,26 +401,37 @@ export async function saveAnalysisResults(params: {
   }
 
   // 3. Save proposed common time slots (top 3)
+  // US-012: Include partial match information
   const proposals = [];
   const allParticipantIds =
     params.analysisResult.event.participantWithAvailability.map(
       (p) => p.user_id
     );
 
-  for (let i = 0; i < Math.min(params.commonSlots.length, 3); i++) {
-    const slot = params.commonSlots[i];
-    proposals.push({
-      id: crypto.randomUUID(),
-      analysisId,
-      proposedStart: new Date(slot.start),
-      proposedEnd: new Date(slot.end),
-      matchingParticipantsCount: totalParticipants,
-      totalParticipantsCount: totalParticipants,
-      isPartialMatch: false,
-      matchingUserHashes: allParticipantIds,
-      missingUserHashes: [],
-      rank: i + 1,
-    });
+  if (params.matchResult && params.matchResult.slots.length > 0) {
+    // Get matching and missing participant hashes
+    const matchingUserHashes = params.matchResult.matchingIndices.map(
+      (idx) => params.analysisResult.event.participantWithAvailability[idx].user_id
+    );
+    const missingUserHashes = params.matchResult.missingIndices.map(
+      (idx) => params.analysisResult.event.participantWithAvailability[idx].user_id
+    );
+
+    for (let i = 0; i < Math.min(params.matchResult.slots.length, 3); i++) {
+      const slot = params.matchResult.slots[i];
+      proposals.push({
+        id: crypto.randomUUID(),
+        analysisId,
+        proposedStart: new Date(slot.start),
+        proposedEnd: new Date(slot.end),
+        matchingParticipantsCount: params.matchResult.matchingParticipants,
+        totalParticipantsCount: params.matchResult.totalParticipants,
+        isPartialMatch: params.matchResult.isPartialMatch,
+        matchingUserHashes,
+        missingUserHashes,
+        rank: i + 1,
+      });
+    }
   }
 
   if (proposals.length > 0) {
@@ -428,6 +451,9 @@ export async function saveAnalysisResults(params: {
   console.log("Status:", status);
   console.log("Parsed Availabilities:", parsedAvailabilities.length);
   console.log("Proposed Slots:", proposals.length);
+  if (params.matchResult?.isPartialMatch) {
+    console.log("PARTIAL MATCH:", params.matchResult.matchingParticipants, "/", params.matchResult.totalParticipants);
+  }
   console.log("===================================");
 
   return { analysisId };
@@ -436,11 +462,19 @@ export async function saveAnalysisResults(params: {
 /**
  * Get the latest analysis results for a room
  * Returns the most recent analysis with proposed time slots
+ * US-012: Supports both full matches and partial matches
  */
 export async function getLatestAnalysisResults(roomId: string) {
-  // Get the latest completed analysis for this room
+  // Get the latest completed analysis for this room (success OR partial_success)
   const latestAnalysis = await db.query.analysis.findFirst({
-    where: and(eq(analysis.roomId, roomId), eq(analysis.status, "success")),
+    where: and(
+      eq(analysis.roomId, roomId),
+      // Include both success and partial_success statuses
+      or(
+        eq(analysis.status, "success"),
+        eq(analysis.status, "partial_success")
+      )
+    ),
     orderBy: [desc(analysis.createdAt)],
     with: {
       proposedSlots: {
@@ -459,6 +493,9 @@ export async function getLatestAnalysisResults(roomId: string) {
     start: slot.proposedStart.toISOString(),
     end: slot.proposedEnd.toISOString(),
     isSelected: slot.isSelected, // Include selection status
+    isPartialMatch: slot.isPartialMatch, // US-012: Include partial match flag
+    matchingParticipantsCount: slot.matchingParticipantsCount,
+    totalParticipantsCount: slot.totalParticipantsCount,
   }));
 
   const contextData = latestAnalysis.contextData as {
@@ -468,6 +505,7 @@ export async function getLatestAnalysisResults(roomId: string) {
 
   return {
     analysisId: latestAnalysis.id,
+    status: latestAnalysis.status, // Include status for UI to distinguish
     commonSlots,
     participantsCount: contextData?.participantsCount || 0,
     meetingDuration: contextData?.minDurationInMinutes || 0,
