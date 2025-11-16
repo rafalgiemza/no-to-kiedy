@@ -16,11 +16,11 @@ export default function SignupPage() {
               width={50}
               height={50}
               src={"/better-auth-starter.png"}
-              alt="Better Auth Starter Logo"
+              alt="no to kiedy Logo"
               priority
             />
           </div>
-          Better Auth Starter
+          no to kiedy
         </Link>
         <SignupForm />
       </div>

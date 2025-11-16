@@ -1,10 +1,10 @@
-# Better Auth Starter
+# no to kiedy
 
 ![ChatGPT Image Jun 9, 2025, 07_09_10 PM](https://github.com/user-attachments/assets/660133ca-5463-4c77-9ece-37280caa229c)
 
 ## Overview
 
-The Better Auth Starter is simple starter pack using Next.js, Better Auth, Shadcn, Drizzle, and Neon
+The no to kiedy is simple starter pack using Next.js, Better Auth, Shadcn, Drizzle, and Neon
 
 ## Getting Started
 
