@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { createRoom } from "@/server/rooms";
+import { NumberInput } from "../ui/number-input";
+import { useRouter } from "next/navigation";
 
 const formSchema = z
   .object({
@@ -43,6 +45,7 @@ const formSchema = z
 
 export function CreateRoomForm() {
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -55,18 +58,20 @@ export function CreateRoomForm() {
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      setIsLoading(true);
-      await createRoom({
-        title: values.title,
-        meetingDuration: values.meetingDuration,
-        searchTimeframeStart: new Date(values.searchTimeframeStart),
-        searchTimeframeEnd: new Date(values.searchTimeframeEnd),
-      });
-      toast.success("Chat room created successfully");
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to create chat room");
+    setIsLoading(true);
+
+    const result = await createRoom({
+      title: values.title,
+      meetingDuration: values.meetingDuration,
+      searchTimeframeStart: new Date(values.searchTimeframeStart),
+      searchTimeframeEnd: new Date(values.searchTimeframeEnd),
+    });
+
+    if (result.success) {
+      toast.success(result.message);
+      router.push(`/chat/${result.roomId}`);
+    } else {
+      toast.error(result.message);
       setIsLoading(false);
     }
   }
@@ -96,13 +101,7 @@ export function CreateRoomForm() {
             <FormItem>
               <FormLabel>Meeting Duration (minutes)</FormLabel>
               <FormControl>
-                <Input
-                  type="number"
-                  placeholder="60"
-                  min="15"
-                  max="480"
-                  {...field}
-                />
+                <NumberInput placeholder="60" min="15" max="480" {...field} />
               </FormControl>
               <FormDescription>
                 How long should the meeting last? (15-480 minutes)

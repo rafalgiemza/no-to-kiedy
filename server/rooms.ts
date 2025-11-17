@@ -3,7 +3,6 @@
 import { db } from "@/db/drizzle";
 import { room, roomParticipant } from "@/db/schema";
 import { getCurrentUser } from "./users";
-import { redirect } from "next/navigation";
 import { eq, or } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -15,45 +14,57 @@ interface CreateRoomInput {
 }
 
 export async function createRoom(input: CreateRoomInput) {
-  const { currentUser } = await getCurrentUser();
+  try {
+    const { currentUser } = await getCurrentUser();
 
-  // Generate unique invite code
-  const inviteCode = crypto.randomBytes(8).toString("hex");
+    // Generate unique invite code
+    const inviteCode = crypto.randomBytes(8).toString("hex");
 
-  // Generate room ID
-  const roomId = crypto.randomUUID();
+    // Generate room ID
+    const roomId = crypto.randomUUID();
 
-  // Create room
-  await db.insert(room).values({
-    id: roomId,
-    title: input.title,
-    ownerId: currentUser.id,
-    meetingDuration: input.meetingDuration,
-    searchTimeframeStart: input.searchTimeframeStart,
-    searchTimeframeEnd: input.searchTimeframeEnd,
-    inviteCode,
-    status: "active",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+    // Create room
+    await db.insert(room).values({
+      id: roomId,
+      title: input.title,
+      ownerId: currentUser.id,
+      meetingDuration: input.meetingDuration,
+      searchTimeframeStart: input.searchTimeframeStart,
+      searchTimeframeEnd: input.searchTimeframeEnd,
+      inviteCode,
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
-  // Add owner as participant with owner role
-  const participantId = crypto.randomUUID();
-  const anonymizedHash = crypto
-    .createHash("sha256")
-    .update(`${roomId}-${currentUser.id}`)
-    .digest("hex");
+    // Add owner as participant with owner role
+    const participantId = crypto.randomUUID();
+    const anonymizedHash = crypto
+      .createHash("sha256")
+      .update(`${roomId}-${currentUser.id}`)
+      .digest("hex");
 
-  await db.insert(roomParticipant).values({
-    id: participantId,
-    roomId,
-    userId: currentUser.id,
-    role: "owner",
-    anonymizedHash,
-    joinedAt: new Date(),
-  });
+    await db.insert(roomParticipant).values({
+      id: participantId,
+      roomId,
+      userId: currentUser.id,
+      role: "owner",
+      anonymizedHash,
+      joinedAt: new Date(),
+    });
 
-  redirect(`/chat/${roomId}`);
+    return {
+      success: true,
+      roomId,
+      message: "Chat room created successfully",
+    };
+  } catch (error) {
+    console.error("Error creating room:", error);
+    return {
+      success: false,
+      message: "Failed to create chat room",
+    };
+  }
 }
 
 export async function getRoomById(roomId: string) {
