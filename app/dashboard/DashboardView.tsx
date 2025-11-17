@@ -17,6 +17,15 @@ import {
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { getMyRooms } from "@/server/rooms";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { CreateRoomForm } from "@/components/forms/create-room-form";
 
 // Typ danych pokoju na podstawie funkcji getMyRooms
 type ChatRoom = Awaited<ReturnType<typeof getMyRooms>>[number];
@@ -82,10 +91,24 @@ const DashboardView: React.FC<DashboardViewProps> = ({
             Zarządzaj swoimi rozmowami i spotkaniami
           </p>
         </div>
-        <Button size="lg" className="gap-2">
-          <Plus className="h-5 w-5" />
-          Utwórz nowy czat
-        </Button>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-5 w-5" />
+              Create Chat Room
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Create Chat Room</DialogTitle>
+              <DialogDescription>
+                Set up a new meeting room to find the best time for everyone.
+              </DialogDescription>
+            </DialogHeader>
+            <CreateRoomForm />
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Grid z czatami */}
