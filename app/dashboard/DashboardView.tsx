@@ -56,12 +56,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({
   // Mapowanie danych z bazy na format wyświetlania
   const chats: Chat[] = chatRooms.map((room) => ({
     id: room.id,
-    title: room.title || "Bez tytułu",
+    title: room.title || "Untitled",
     ownerId: room.ownerId,
     participants: room.participants.map((p) => p.user.name),
     createdAt: room.createdAt,
     status: room.status === "completed" ? "complete" : "active",
-    summary: `Spotkanie na ${room.meetingDuration} minut`,
+    summary: `Meeting for ${room.meetingDuration} minutes`,
     foundAppointment:
       room.finalizedSlotStart && room.finalizedSlotEnd
         ? {
@@ -86,9 +86,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Nagłówek z przyciskiem tworzenia */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Moje czaty</h1>
+          <h1 className="text-3xl font-bold text-foreground">My Chats</h1>
           <p className="text-muted-foreground mt-1">
-            Zarządzaj swoimi rozmowami i spotkaniami
+            Manage your conversations and meetings
           </p>
         </div>
 
@@ -132,7 +132,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   variant={chat.status === "active" ? "default" : "secondary"}
                   className="text-xs"
                 >
-                  {chat.status === "active" ? "Aktywny" : "Zakończony"}
+                  {chat.status === "active" ? "Active" : "Completed"}
                 </Badge>
                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                   <Users className="h-3 w-3" />
@@ -152,7 +152,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="bg-secondary/50 dark:bg-secondary/20 rounded-md p-2">
                   <div className="flex items-center gap-1 text-xs font-medium text-foreground mb-1">
                     <Calendar className="h-3 w-3" />
-                    <span>Następne spotkanie:</span>
+                    <span>Next meeting:</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
@@ -164,7 +164,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                     </span>
                     {chat.foundAppointment.confirmed && (
                       <Badge variant="outline" className="text-xs py-0 px-1">
-                        Potwierdzone
+                        Confirmed
                       </Badge>
                     )}
                   </div>
@@ -176,7 +176,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                 <Button asChild size="sm" className="flex-1">
                   <Link href={`/chat/${chat.id}`}>
                     <ExternalLink className="h-3 w-3 mr-1" />
-                    Otwórz
+                    Open
                   </Link>
                 </Button>
                 <Button
@@ -186,11 +186,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({
                   className="flex-1 cursor-pointer"
                 >
                   {copiedId === chat.id ? (
-                    <>Skopiowano!</>
+                    <>Copied!</>
                   ) : (
                     <>
                       <Copy className="h-3 w-3 mr-1" />
-                      Kopiuj link
+                      Copy link
                     </>
                   )}
                 </Button>
@@ -206,14 +206,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({
           <CardContent className="flex flex-col items-center justify-center py-16">
             <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">
-              Brak czatów
+              No chats
             </h3>
             <p className="text-muted-foreground text-center mb-4">
-              Nie masz jeszcze żadnych czatów. Rozpocznij nową rozmowę!
+              You do not have any chats yet. Start a new conversation!
             </p>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Utwórz pierwszy czat
+              Create first chat
             </Button>
           </CardContent>
         </Card>
