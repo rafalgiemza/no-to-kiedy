@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { createRoom } from "@/server/rooms";
+import { NumberInput } from "../ui/number-input";
 
 const formSchema = z
   .object({
@@ -96,13 +97,7 @@ export function CreateRoomForm() {
             <FormItem>
               <FormLabel>Meeting Duration (minutes)</FormLabel>
               <FormControl>
-                <Input
-                  type="number"
-                  placeholder="60"
-                  min="15"
-                  max="480"
-                  {...field}
-                />
+                <NumberInput placeholder="60" min="15" max="480" {...field} />
               </FormControl>
               <FormDescription>
                 How long should the meeting last? (15-480 minutes)
